@@ -6,152 +6,192 @@
 
 <style>
 body{
-  margin:0;height:100vh;font-family:Arial;
-  background:linear-gradient(120deg,#3a1c71,#d76d77,#ffaf7b);
-  display:flex;justify-content:center;align-items:center;
-  overflow:hidden;
+    margin:0;
+    height:100vh;
+    font-family:Arial;
+    background:linear-gradient(120deg,#3a1c71,#d76d77,#ffaf7b);
+    display:flex;
+    justify-content:center;
+    align-items:center;
 }
 .container{
-  background:rgba(0,0,0,.75);
-  padding:35px;border-radius:20px;width:560px;
-  color:#fff;text-align:center;
+    background:rgba(0,0,0,0.75);
+    padding:35px;
+    border-radius:20px;
+    width:560px;
+    text-align:center;
+    color:white;
 }
 textarea{
-  width:100%;height:120px;border-radius:12px;
-  border:none;padding:12px;font-size:16px;
+    width:100%;
+    height:120px;
+    border-radius:12px;
+    border:none;
+    padding:12px;
+    font-size:16px;
 }
 button{
-  margin-top:18px;padding:12px 35px;
-  border:none;border-radius:30px;
-  background:#ff9800;color:#fff;
-  font-weight:bold;cursor:pointer;
+    margin-top:18px;
+    padding:12px 35px;
+    font-size:16px;
+    border:none;
+    border-radius:30px;
+    background:#ff9800;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
 }
-.result{margin-top:20px;font-size:17px}
-.fall{
-  position:fixed;top:-40px;font-size:32px;
-  animation:fall 3s linear forwards;
+button:disabled{background:gray;}
+.result{
+    margin-top:20px;
+    font-size:18px;
+    line-height:1.6;
 }
-@keyframes fall{
-  from{transform:translateY(0);opacity:1}
-  to{transform:translateY(110vh);opacity:0}
+#status{
+    font-size:14px;
+    color:#90ee90;
+    margin-bottom:10px;
 }
 </style>
 </head>
 
 <body>
+
 <div class="container">
-  <h2>EMOTE</h2>
-  <p>Emotion Detection using GoEmotions Dataset</p>
+    <h2>EMOTE</h2>
+    <p>Emotion Detection using GoEmotions Dataset</p>
 
-  <textarea id="inputText" placeholder="Enter one sentence only..."></textarea>
-  <button onclick="detectEmotion()">Detect Emotion</button>
+    <div id="status">Loading dataset...</div>
 
-  <div class="result" id="output"></div>
+    <textarea id="inputText" placeholder="Enter one sentence only..."></textarea>
+
+    <button id="detectBtn" onclick="detectEmotion()" disabled>
+        Detect Emotion
+    </button>
+
+    <div class="result" id="output"></div>
 </div>
 
 <script>
-let dataset=[], loaded=false;
+let dataset = [];
+let ready = false;
 
-/* ===== NORMALIZE TEXT ===== */
-function norm(t){
-  return t.toLowerCase()
-    .replace(/\bi m\b/g,"i am")
-    .replace(/\bim\b/g,"i am")
-    .replace(/[^\w\s]/g,"")
-    .trim();
+/* ========= NORMALIZE TEXT ========= */
+function clean(text){
+    return text.toLowerCase()
+        .replace(/\bi m\b/g,"i am")
+        .replace(/[^\w\s]/g,"")
+        .trim();
 }
 
-/* ===== LOAD DATASET ===== */
+/* ========= LOAD DATASET ========= */
 fetch("goemotions_1.csv")
 .then(r=>r.text())
-.then(d=>{
-  const l=d.trim().split(/\r?\n/);
-  const h=l[0].toLowerCase().split(",");
-  const ti=h.indexOf("text");
-  const ei=h.indexOf("emotion");
+.then(data=>{
+    const lines=data.trim().split(/\r?\n/);
+    const h=lines[0].toLowerCase().split(",");
+    const ti=h.indexOf("text");
+    const ei=h.indexOf("emotion");
 
-  for(let i=1;i<l.length;i++){
-    const c=l[i].split(",");
-    dataset.push({text:norm(c[ti]),emotion:c[ei].toLowerCase()});
-  }
-  loaded=true;
+    for(let i=1;i<lines.length;i++){
+        const c=lines[i].split(",");
+        dataset.push({
+            text:clean(c[ti]),
+            emotion:c[ei].toLowerCase()
+        });
+    }
+
+    ready=true;
+    document.getElementById("status").innerText=
+        "Dataset loaded ✔ ("+dataset.length+" samples)";
+    document.getElementById("detectBtn").disabled=false;
 });
 
-/* ===== EMOTION STYLE ===== */
-const style={
-  happy:["#4CAF50","😊"], sad:["#2196F3","😢"],
-  anger:["#F44336","😡"], fear:["#9C27B0","😨"],
-  love:["#E91E63","❤️"], surprise:["#FFC107","😲"],
-  disgust:["#795548","🤢"], neutral:["#BDBDBD","😐"]
-};
+/* ========= PREDICTION (FIXED) ========= */
+function predictEmotion(input){
+    const words=clean(input).split(" ");
+    let scores={};
 
-/* ===== PREDICT (DATASET ONLY) ===== */
-function predict(txt){
-  let s={}, w=norm(txt).split(" ");
-  dataset.forEach(r=>{
-    r.text.split(" ").forEach(x=>{
-      if(w.includes(x)){
-        s[r.emotion]=(s[r.emotion]||0)+1;
-      }
+    dataset.forEach(row=>{
+        let match=0;
+        words.forEach(w=>{
+            if(row.text.includes(w)) match++;
+        });
+        if(match>0){
+            scores[row.emotion]=(scores[row.emotion]||0)+match;
+        }
     });
-  });
-  let b="neutral",m=0;
-  for(let e in s){if(s[e]>m){m=s[e];b=e}}
-  return b;
+
+    let best="neutral",max=0;
+    for(let e in scores){
+        if(scores[e]>max){
+            max=scores[e];
+            best=e;
+        }
+    }
+
+    // fallback: most frequent emotion
+    if(max===0){
+        const freq={};
+        dataset.forEach(r=>{
+            freq[r.emotion]=(freq[r.emotion]||0)+1;
+        });
+        best=Object.keys(freq)
+            .reduce((a,b)=>freq[a]>freq[b]?a:b);
+    }
+    return best;
 }
 
-/* ===== METRICS FROM DATASET ===== */
+/* ========= METRICS ========= */
 function metrics(){
-  let tp={},fp={},fn={},c=0;
-  dataset.forEach(r=>{
-    let p=predict(r.text), a=r.emotion;
-    tp[a]=tp[a]||0; fp[a]=fp[a]||0; fn[a]=fn[a]||0;
-    if(p===a){tp[a]++;c++}
-    else{fp[p]=(fp[p]||0)+1;fn[a]++}
-  });
-  let ps=0,rs=0,fs=0,n=0;
-  for(let e in tp){
-    let pr=tp[e]/((tp[e]+(fp[e]||0))||1);
-    let re=tp[e]/((tp[e]+(fn[e]||0))||1);
-    let f1=(2*pr*re)/((pr+re)||1);
-    ps+=pr;rs+=re;fs+=f1;n++;
-  }
-  return {
-    acc:(c/dataset.length).toFixed(2),
-    p:(ps/n).toFixed(2),
-    r:(rs/n).toFixed(2),
-    f:(fs/n).toFixed(2)
-  };
+    let tp={},fp={},fn={},correct=0;
+
+    dataset.forEach(r=>{
+        const p=predictEmotion(r.text);
+        const a=r.emotion;
+
+        tp[a]=tp[a]||0;
+        fp[a]=fp[a]||0;
+        fn[a]=fn[a]||0;
+
+        if(p===a){tp[a]++;correct++;}
+        else{fp[p]=(fp[p]||0)+1;fn[a]++;}
+    });
+
+    let ps=0,rs=0,fs=0,n=0;
+    for(let e in tp){
+        let p=tp[e]/((tp[e]+(fp[e]||0))||1);
+        let r=tp[e]/((tp[e]+(fn[e]||0))||1);
+        let f=2*p*r/((p+r)||1);
+        ps+=p;rs+=r;fs+=f;n++;
+    }
+
+    return{
+        acc:(correct/dataset.length).toFixed(2),
+        p:(ps/n).toFixed(2),
+        r:(rs/n).toFixed(2),
+        f:(fs/n).toFixed(2)
+    };
 }
 
-/* ===== FALLING ANIMATION ===== */
-function fall(e){
-  for(let i=0;i<12;i++){
-    let s=document.createElement("span");
-    s.className="fall"; s.innerText=style[e][1];
-    s.style.left=Math.random()*100+"vw";
-    s.style.color=style[e][0];
-    document.body.appendChild(s);
-    setTimeout(()=>s.remove(),3000);
-  }
-}
-
-/* ===== MAIN ===== */
+/* ========= MAIN ========= */
 function detectEmotion(){
-  if(!loaded){alert("Dataset loading…");return}
-  const t=document.getElementById("inputText").value.trim();
-  if(!t)return;
-  const e=predict(t), m=metrics();
-  document.getElementById("output").innerHTML=`
-    <span style="color:${style[e][0]}">
-      <b>Predicted Emotion:</b> ${e.toUpperCase()}
-    </span><br>
-    Accuracy: ${m.acc}<br>
-    Precision: ${m.p}<br>
-    Recall: ${m.r}<br>
-    F1-Score: ${m.f}`;
-  fall(e);
+    if(!ready) return;
+
+    const text=document.getElementById("inputText").value.trim();
+    if(!text) return;
+
+    const emo=predictEmotion(text);
+    const m=metrics();
+
+    document.getElementById("output").innerHTML=
+        `<b>Predicted Emotion:</b> ${emo.toUpperCase()}<br>
+         Accuracy: ${m.acc}<br>
+         Precision: ${m.p}<br>
+         Recall: ${m.r}<br>
+         F1-Score: ${m.f}`;
 }
 </script>
+
 </body>
 </html>
