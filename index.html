@@ -9,39 +9,40 @@ body {
     margin: 0;
     height: 100vh;
     font-family: Arial, sans-serif;
-    background: linear-gradient(120deg, #1d2671, #c33764);
+    background: linear-gradient(120deg, #3a1c71, #d76d77, #ffaf7b);
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 }
 
 .container {
-    background: rgba(0,0,0,0.65);
+    background: rgba(0,0,0,0.75);
     padding: 35px;
     border-radius: 20px;
-    width: 480px;
+    width: 560px;
     text-align: center;
     color: white;
-    box-shadow: 0 20px 45px rgba(0,0,0,0.7);
+    box-shadow: 0 20px 45px rgba(0,0,0,0.8);
+    z-index: 2;
 }
 
 textarea {
     width: 100%;
-    height: 110px;
+    height: 120px;
     border-radius: 12px;
     border: none;
     padding: 12px;
-    font-size: 15px;
-    margin-top: 10px;
+    font-size: 16px;
 }
 
 button {
     margin-top: 18px;
-    padding: 12px 30px;
+    padding: 12px 35px;
     font-size: 16px;
     border: none;
-    border-radius: 25px;
-    background: linear-gradient(45deg, #ff9800, #ff5722);
+    border-radius: 30px;
+    background: #ff9800;
     color: white;
     font-weight: bold;
     cursor: pointer;
@@ -49,19 +50,39 @@ button {
 
 button:disabled {
     background: gray;
-    cursor: not-allowed;
 }
 
 .result {
     margin-top: 20px;
-    font-size: 18px;
-    font-weight: bold;
+    font-size: 17px;
+    line-height: 1.6;
 }
 
 .status {
-    margin-top: 10px;
+    margin-bottom: 10px;
     font-size: 14px;
     color: #90ee90;
+}
+
+/* ===== FALLING EMOTION ANIMATION ===== */
+.fall {
+    position: fixed;
+    top: -50px;
+    font-size: 32px;
+    animation: fall 3s linear forwards;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes fall {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(110vh);
+        opacity: 0;
+    }
 }
 </style>
 </head>
@@ -84,101 +105,144 @@ button:disabled {
 </div>
 
 <script>
-/* =====================================================
-   AUTO-LOAD DATASET: goemotions_1.csv
-===================================================== */
 let dataset = [];
 
+/* ================= LOAD DATASET ================= */
 fetch("goemotions_1.csv")
-    .then(response => {
-        if (!response.ok) {
-            throw new Error("Dataset not found");
-        }
-        return response.text();
-    })
-    .then(data => {
-        const lines = data.trim().split(/\r?\n/);
-        const headers = lines[0].toLowerCase().split(",");
+.then(res => res.text())
+.then(data => {
+    const lines = data.trim().split(/\r?\n/);
+    const headers = lines[0].toLowerCase().split(",");
 
-        const textIndex = headers.indexOf("text");
-        const emotionIndex = headers.indexOf("emotion");
+    const textIdx = headers.indexOf("text");
+    const emotionIdx = headers.indexOf("emotion");
 
-        if (textIndex === -1 || emotionIndex === -1) {
-            document.getElementById("status").innerText =
-                "CSV must contain columns: text, emotion";
-            return;
-        }
-
-        for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(",");
-            if (cols.length > Math.max(textIndex, emotionIndex)) {
-                dataset.push({
-                    text: cols[textIndex].toLowerCase(),
-                    emotion: cols[emotionIndex].toLowerCase()
-                });
-            }
-        }
-
+    if (textIdx === -1 || emotionIdx === -1) {
         document.getElementById("status").innerText =
-            `Dataset loaded (${dataset.length} rows)`;
-        document.getElementById("detectBtn").disabled = false;
-    })
-    .catch(error => {
-        document.getElementById("status").innerText =
-            "Failed to load goemotions_1.csv";
-    });
-
-/* =====================================================
-   DATASET-ONLY SIMILARITY PREDICTION
-===================================================== */
-function predictEmotion(userText) {
-    userText = userText.toLowerCase();
-    const userWords = userText.split(/\s+/);
-
-    let scores = {};
-
-    dataset.forEach(row => {
-        const rowWords = row.text.split(/\s+/);
-        let match = 0;
-
-        userWords.forEach(word => {
-            if (rowWords.includes(word)) match++;
-        });
-
-        if (match > 0) {
-            scores[row.emotion] = (scores[row.emotion] || 0) + match;
-        }
-    });
-
-    let bestEmotion = "neutral";
-    let maxScore = 0;
-
-    for (let emotion in scores) {
-        if (scores[emotion] > maxScore) {
-            maxScore = scores[emotion];
-            bestEmotion = emotion;
-        }
-    }
-
-    return bestEmotion;
-}
-
-/* =====================================================
-   MAIN FUNCTION
-===================================================== */
-function detectEmotion() {
-    const input = document.getElementById("inputText").value.trim();
-
-    if (input === "") {
-        document.getElementById("output").innerHTML =
-            "⚠️ Please enter a sentence";
+            "CSV must contain columns: text, emotion";
         return;
     }
 
-    const emotion = predictEmotion(input);
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
+        dataset.push({
+            text: cols[textIdx].toLowerCase(),
+            emotion: cols[emotionIdx].toLowerCase()
+        });
+    }
 
-    document.getElementById("output").innerHTML =
-        `Predicted Emotion: <b>${emotion.toUpperCase()}</b>`;
+    document.getElementById("status").innerText =
+        `Dataset loaded (${dataset.length} samples)`;
+    document.getElementById("detectBtn").disabled = false;
+});
+
+/* ================= EMOTION COLORS + EMOJI ================= */
+const emotionStyle = {
+    happy: { color: "#4CAF50", emoji: "😊" },
+    sad: { color: "#2196F3", emoji: "😢" },
+    anger: { color: "#F44336", emoji: "😡" },
+    fear: { color: "#9C27B0", emoji: "😨" },
+    love: { color: "#E91E63", emoji: "❤️" },
+    surprise: { color: "#FFC107", emoji: "😲" },
+    disgust: { color: "#795548", emoji: "🤢" },
+    neutral: { color: "#BDBDBD", emoji: "😐" }
+};
+
+/* ================= PREDICTION ================= */
+function predictEmotion(input) {
+    let score = {};
+    const words = input.toLowerCase().split(/\s+/);
+
+    dataset.forEach(row => {
+        row.text.split(/\s+/).forEach(w => {
+            if (words.includes(w)) {
+                score[row.emotion] = (score[row.emotion] || 0) + 1;
+            }
+        });
+    });
+
+    let best = "neutral", max = 0;
+    for (let e in score) {
+        if (score[e] > max) {
+            max = score[e];
+            best = e;
+        }
+    }
+    return best;
+}
+
+/* ================= METRICS ================= */
+function calculateMetrics() {
+    let tp = {}, fp = {}, fn = {}, correct = 0;
+
+    dataset.forEach(row => {
+        const pred = predictEmotion(row.text);
+        const actual = row.emotion;
+
+        tp[actual] = tp[actual] || 0;
+        fp[actual] = fp[actual] || 0;
+        fn[actual] = fn[actual] || 0;
+
+        if (pred === actual) {
+            correct++;
+            tp[actual]++;
+        } else {
+            fp[pred] = (fp[pred] || 0) + 1;
+            fn[actual]++;
+        }
+    });
+
+    const accuracy = (correct / dataset.length).toFixed(2);
+
+    let p = 0, r = 0, f = 0, n = 0;
+    for (let e in tp) {
+        let prec = tp[e] / ((tp[e] + (fp[e] || 0)) || 1);
+        let rec = tp[e] / ((tp[e] + (fn[e] || 0)) || 1);
+        let f1 = (2 * prec * rec) / ((prec + rec) || 1);
+        p += prec; r += rec; f += f1; n++;
+    }
+
+    return {
+        accuracy,
+        precision: (p / n).toFixed(2),
+        recall: (r / n).toFixed(2),
+        f1: (f / n).toFixed(2)
+    };
+}
+
+/* ================= FALLING EMOTION ================= */
+function showFallingEmotion(emotion) {
+    for (let i = 0; i < 15; i++) {
+        const span = document.createElement("span");
+        span.className = "fall";
+        span.innerText = emotionStyle[emotion].emoji;
+        span.style.left = Math.random() * 100 + "vw";
+        span.style.color = emotionStyle[emotion].color;
+        document.body.appendChild(span);
+
+        setTimeout(() => span.remove(), 3000);
+    }
+}
+
+/* ================= MAIN ================= */
+function detectEmotion() {
+    const input = document.getElementById("inputText").value.trim();
+    if (!input) return;
+
+    const emotion = predictEmotion(input);
+    const m = calculateMetrics();
+
+    document.getElementById("output").innerHTML = `
+        <span style="color:${emotionStyle[emotion].color}">
+            <b>Predicted Emotion:</b> ${emotion.toUpperCase()}
+        </span><br>
+        Accuracy: ${m.accuracy}<br>
+        Precision: ${m.precision}<br>
+        Recall: ${m.recall}<br>
+        F1-Score: ${m.f1}
+    `;
+
+    showFallingEmotion(emotion);
 }
 </script>
 
